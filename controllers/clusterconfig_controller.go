@@ -28,7 +28,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
-	errors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -43,6 +43,7 @@ import (
 	bmh_v1alpha1 "github.com/metal3-io/baremetal-operator/apis/metal3.io/v1alpha1"
 	"github.com/openshift-kni/lifecycle-agent/ibu-imager/clusterinfo"
 	relocationv1alpha1 "github.com/openshift/cluster-relocation-service/api/v1alpha1"
+	"github.com/openshift/cluster-relocation-service/internal/certs"
 	"github.com/openshift/cluster-relocation-service/internal/filelock"
 	"github.com/sirupsen/logrus"
 )
@@ -70,11 +71,12 @@ const (
 	extraManifestsDir          = "extra-manifests"
 	manifestsDir               = "manifests"
 	networkConfigDir           = "network-configuration"
+	certificatesDir            = "certs"
 	clusterConfigFinalizerName = "clusterconfig." + relocationv1alpha1.Group + "/deprovision"
 	caBundleFileName           = "tls-ca-bundle.pem"
 )
 
-//+kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
+//+kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=relocation.openshift.io,resources=clusterconfigs,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=relocation.openshift.io,resources=clusterconfigs/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=relocation.openshift.io,resources=clusterconfigs/finalizers,verbs=update
@@ -108,7 +110,7 @@ func (r *ClusterConfigReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return res, err
 	}
 
-	u, err := url.JoinPath(r.BaseURL, "images", req.Namespace, fmt.Sprintf("%s.iso", req.Name))
+	url, err := url.JoinPath(r.BaseURL, "images", req.Namespace, fmt.Sprintf("%s.iso", req.Name))
 	if err != nil {
 		log.WithError(err).Error("failed to create image url")
 		if updateErr := r.setImageReadyCondition(ctx, config, err); updateErr != nil {
@@ -130,7 +132,7 @@ func (r *ClusterConfigReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	}
 
 	if config.Spec.BareMetalHostRef != nil {
-		if err := r.setBMHImage(ctx, config.Spec.BareMetalHostRef, u); err != nil {
+		if err := r.setBMHImage(ctx, config.Spec.BareMetalHostRef, url); err != nil {
 			log.WithError(err).Error("failed to set BareMetalHost image")
 			if updateErr := r.setHostConfiguredCondition(ctx, config, err); updateErr != nil {
 				log.WithError(updateErr).Error("failed to update cluster config status")
@@ -411,7 +413,30 @@ func (r *ClusterConfigReconciler) writeInputData(ctx context.Context, log logrus
 				}
 			}
 		}
+		certificatesPath := filepath.Join(filesDir, certificatesDir)
+		if err := os.MkdirAll(certificatesPath, 0700); err != nil {
+			return err
+		}
 
+		certManager := certs.KubeConfigCertManager{CertificatesDir: certificatesPath}
+		// TODO: handle user provided API and ingress certs
+		if err := certManager.GenerateAllCertificates(); err != nil {
+			return fmt.Errorf("failed to generate certificates: %w", err)
+		}
+		kubeconfigBytes, err := certManager.GenerateKubeConfig(config.Spec.Domain)
+		if err != nil {
+			return fmt.Errorf("failed to generate kubeconfig: %w", err)
+		}
+		err = r.CreateKubeconfigSecret(ctx, config, kubeconfigBytes)
+		if err != nil {
+			return err
+		}
+		// This isn't required, it's just might be useful
+		kubeconfigFile := filepath.Join(certificatesPath, "kubeconfig")
+		err = os.WriteFile(kubeconfigFile, kubeconfigBytes, 0644)
+		if err != nil {
+			return err
+		}
 		return nil
 	})
 	if lockErr != nil {
@@ -421,14 +446,41 @@ func (r *ClusterConfigReconciler) writeInputData(ctx context.Context, log logrus
 		return ctrl.Result{}, fmt.Errorf("failed to write input data: %w", funcErr)
 	}
 	if !locked {
-		log.Info("requeueing due to lock contention")
+		r.Log.Info("requeuing due to lock contention")
 		if updateErr := r.setImageReadyCondition(ctx, config, fmt.Errorf("could not acquire lock for image data")); updateErr != nil {
-			log.WithError(updateErr).Error("failed to update cluster config status")
+			r.Log.WithError(updateErr).Error("failed to update cluster config status")
 		}
 		return ctrl.Result{RequeueAfter: time.Second * 5}, nil
 	}
 
 	return ctrl.Result{}, nil
+}
+
+func (r *ClusterConfigReconciler) CreateKubeconfigSecret(ctx context.Context, config *relocationv1alpha1.ClusterConfig, kubeconfigBytes []byte) error {
+	kubeconfigSecret := &corev1.Secret{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Secret",
+			APIVersion: corev1.SchemeGroupVersion.String(),
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      config.Spec.ClusterName + "-admin-kubeconfig",
+			Namespace: config.Namespace,
+		},
+		Type: corev1.SecretTypeOpaque,
+	}
+	mutateFn := func() error {
+		// Update the Secret object with the desired data
+		kubeconfigSecret.Data = map[string][]byte{
+			"kubeconfig": kubeconfigBytes,
+		}
+		return nil
+	}
+	op, err := controllerutil.CreateOrUpdate(ctx, r.Client, kubeconfigSecret, mutateFn)
+	if err != nil {
+		return fmt.Errorf("failed to create kubeconfig secret: %w", err)
+	}
+	r.Log.Infof("kubeconfig secret %s", op)
+	return nil
 }
 
 func (r *ClusterConfigReconciler) writeClusterInfo(info *clusterinfo.ClusterInfo, file string) error {
