@@ -1,0 +1,49 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: ClusterServiceVersion
+metadata:
+  annotations:
+    alm-examples: '[]'
+    capabilities: Basic Install
+  name: cluster-relocation-service.v0.0.0
+  namespace: placeholder
+spec:
+  apiservicedefinitions: {}
+  customresourcedefinitions:
+    owned:
+    - description: ClusterConfig is the Schema for the clusterconfigs API
+      displayName: Cluster Config
+      kind: ClusterConfig
+      name: clusterconfigs.relocation.openshift.io
+      version: v1alpha1
+  description: Manages relocation and install of Single Node OpenShift clusters using
+    an Image-Based Install strategy.
+  displayName: Cluster Relocation Service
+  icon:
+  - base64data: ""
+    mediatype: ""
+  install:
+    spec:
+      deployments: null
+    strategy: ""
+  installModes:
+  - supported: false
+    type: OwnNamespace
+  - supported: false
+    type: SingleNamespace
+  - supported: false
+    type: MultiNamespace
+  - supported: true
+    type: AllNamespaces
+  keywords:
+  - Installer
+  - OpenShift
+  links:
+  - name: Cluster Relocation Service
+    url: https://cluster-relocation-service.domain
+  maintainers:
+  - email: ncarboni@redhat.com
+    name: Nicholas Carboni
+  maturity: alpha
+  provider:
+    name: Red Hat
+  version: 0.0.0
