@@ -99,6 +99,8 @@ github.com/openshift-kni/lifecycle-agent v0.0.0-20231218125809-9c9bf395ff10 h1:u
 github.com/openshift-kni/lifecycle-agent v0.0.0-20231218125809-9c9bf395ff10/go.mod h1:+7AXvmYXtR4+UjvoMDeeRt4MrV32YK0uUHtHhEPn8MQ=
 github.com/openshift/baremetal-operator/apis v0.0.0-20230703131026-7338252ff820 h1:2LlI9cxnRQP6KJKW1nBKT6I62RuaQ6V7dm6PhZK0qg0=
 github.com/openshift/baremetal-operator/apis v0.0.0-20230703131026-7338252ff820/go.mod h1:124MbDDT1AWBpBNcnAPII2H+6p1Q7MIBF67egVtjYbc=
+github.com/openshift/library-go v0.0.0-20231027143522-b8cd45d2d2c8 h1:5t2pHTyvfpy5xcKrLCj+6OITwIRdyH1CNG8Ob3vVJvc=
+github.com/openshift/library-go v0.0.0-20231027143522-b8cd45d2d2c8/go.mod h1:8UzmrBMCn7+GzouL8DVYkL9COBQTB1Ggd13/mHJQCUg=
 github.com/pierrec/lz4 v2.3.0+incompatible h1:CZzRn4Ut9GbUkHlQ7jqBXeZQV41ZSKWFc302ZU6lUTk=
 github.com/pierrec/lz4 v2.3.0+incompatible/go.mod h1:pdkljMzZIN41W+lC3N2tnIh5sFi+IEE17M5jbnwPHcY=
 github.com/pkg/errors v0.8.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
@@ -237,6 +239,8 @@ k8s.io/apiextensions-apiserver v0.28.2 h1:J6/QRWIKV2/HwBhHRVITMLYoypCoPY1ftigDM0
 k8s.io/apiextensions-apiserver v0.28.2/go.mod h1:5tnkxLGa9nefefYzWuAlWZ7RZYuN/765Au8cWLA6SRg=
 k8s.io/apimachinery v0.28.2 h1:KCOJLrc6gu+wV1BYgwik4AF4vXOlVJPdiqn0yAWWwXQ=
 k8s.io/apimachinery v0.28.2/go.mod h1:RdzF87y/ngqk9H4z3EL2Rppv5jj95vGS/HaFXrLDApU=
+k8s.io/apiserver v0.28.2 h1:rBeYkLvF94Nku9XfXyUIirsVzCzJBs6jMn3NWeHieyI=
+k8s.io/apiserver v0.28.2/go.mod h1:f7D5e8wH8MWcKD7azq6Csw9UN+CjdtXIVQUyUhrtb+E=
 k8s.io/client-go v0.28.2 h1:DNoYI1vGq0slMBN/SWKMZMw0Rq+0EQW6/AK4v9+3VeY=
 k8s.io/client-go v0.28.2/go.mod h1:sMkApowspLuc7omj1FOSUxSoqjr+d5Q0Yc0LOFnYFJY=
 k8s.io/component-base v0.28.2 h1:Yc1yU+6AQSlpJZyvehm/NkJBII72rzlEsd6MkBQ+G0E=

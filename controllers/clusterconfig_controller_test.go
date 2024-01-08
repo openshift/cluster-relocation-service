@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"k8s.io/client-go/tools/clientcmd"
 	"os"
 	"path/filepath"
 
@@ -309,6 +310,67 @@ var _ = Describe("Reconcile", func() {
 		}
 		_, err := r.Reconcile(ctx, ctrl.Request{NamespacedName: key})
 		Expect(err).To(HaveOccurred())
+	})
+
+	It("creates certificates", func() {
+		config := &relocationv1alpha1.ClusterConfig{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:       configName,
+				Namespace:  configNamespace,
+				Finalizers: []string{clusterConfigFinalizerName},
+			},
+			Spec: relocationv1alpha1.ClusterConfigSpec{
+				ClusterInfo: clusterinfo.ClusterInfo{
+					Domain: "other-test-sno.redhat.com",
+				},
+			},
+		}
+		Expect(c.Create(ctx, config)).To(Succeed())
+
+		key := types.NamespacedName{
+			Namespace: configNamespace,
+			Name:      configName,
+		}
+		res, err := r.Reconcile(ctx, ctrl.Request{NamespacedName: key})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res).To(Equal(ctrl.Result{}))
+
+		// Verify the kubeconfig secret
+		kubeconfigSecret := &corev1.Secret{}
+		err = r.Client.Get(ctx, client.ObjectKey{Namespace: configNamespace, Name: config.Spec.ClusterName + "-admin-kubeconfig"}, kubeconfigSecret)
+		Expect(err).NotTo(HaveOccurred())
+		kubeconfigSecretData, exists := kubeconfigSecret.Data["kubeconfig"]
+		Expect(exists).To(BeTrue())
+		kubeconfig, err := clientcmd.Load(kubeconfigSecretData)
+		Expect(err).NotTo(HaveOccurred())
+		// verify the cluster URL
+		Expect(kubeconfig.Clusters["cluster"].Server).To(Equal(fmt.Sprintf("https://api.%s:6443", config.Spec.Domain)))
+
+		// Verify the kubeconfig file
+		kubeconfigPath := outputFilePath(certificatesDir, "kubeconfig")
+		_, err = os.Stat(kubeconfigPath)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Load the kubeconfig file
+		kubeconifgFromFile, err := clientcmd.LoadFromFile(kubeconfigPath)
+		Expect(err).NotTo(HaveOccurred())
+		// verify the cluster URL
+		Expect(kubeconifgFromFile.Clusters["cluster"].Server).To(Equal(fmt.Sprintf("https://api.%s:6443", config.Spec.Domain)))
+
+		signerKeyFileNames := []string{
+			"loadbalancer-serving-signer.key",
+			"localhost-serving-signer.key",
+			"service-network-serving-signer.key",
+			"ingresskey-ingress-operator.key",
+		}
+		for _, fileName := range signerKeyFileNames {
+			// verify all signer keys exists
+			_, err = os.Stat(outputFilePath(certificatesDir, fileName))
+			Expect(err).NotTo(HaveOccurred())
+		}
+		// verify the admin client CA cert exists
+		_, err = os.Stat(outputFilePath(certificatesDir, "admin-kubeconfig-client-ca.crt"))
+		Expect(err).NotTo(HaveOccurred())
 	})
 
 	It("configures a referenced BMH", func() {
